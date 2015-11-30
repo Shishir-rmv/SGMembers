@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+    <title>SG Member Search</title>
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+    <script src="https://cdn.datatables.net/1.10.10/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.10/js/dataTables.bootstrap.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.0-beta.2/angular.min.js"></script>
+    <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.1.1/css/bootstrap.no-icons.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+
+
+</head>
+
+<body>
+    <div ng-app="sgmApp" ng-controller="mainController">
+        <nav class="navbar navbar-default">
+            <div class="container-fluid">
+                <!-- Brand and toggle get grouped for better mobile display -->
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="#">SG Members</a>
+                </div>
+
+                <!-- Collect the nav links, forms, and other content for toggling -->
+                <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                    <form class="navbar-form navbar-left" role="search">
+                        <div class="input-group">
+                            <input id="searchtxt" type="text" class="form-control" placeholder="Full Text Search...">
+                            <span class="input-group-btn">
+                            <button class="btn btn-default" type="button" ng-click="fullTextSearch()">Go!</button>
+                          </span>
+                        </div>
+                        <!-- /input-group -->
+                    </form>
+                    <ul class="nav navbar-nav navbar-right">
+                        <li>
+                            <a>
+                                <label id="greetinglbl">Good Morning!</label>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <!-- /.navbar-collapse -->
+            </div>
+            <!-- /.container-fluid -->
+        </nav>
+
+        <script>
+            var app = angular.module('sgmApp', []);
+
+            app.factory('dataService', function($http) {
+                var getData = function(data, callback) {
+                    return $http.get("/SGMembers/listAll").then(function(response) {
+                        return response.data;
+                    });
+                };
+                var search = function(data, callback){
+                	return $http.get("/SGMembers/search?query="+data).then(function(response){
+                		return response.data;
+                	});
+                };
+                
+                var greeting = function(data, callback){
+                	return $http.get("/SGMembers/greeting/").then(function(response){
+                		$("#greetinglbl").text(response.data);
+                	});
+                }
+                return {
+                    getData: getData,
+                    search: search,
+                    greeting: greeting
+                };
+            });
+
+
+            app.controller('mainController', function($scope, $filter, dataService) {
+            	var myDataPromise = dataService.getData();
+            	$scope.fullTextSearch = function(){
+            		$scope.searchText = $('#searchtxt').val();
+            		var searchDataPromise = dataService.search($scope.searchText);
+            		searchDataPromise.then(function(result) {
+	                    $scope.members = result;
+	                    console.log("Controller");
+	                    $scope.sort = {
+	                        sortingOrder: 'status',
+	                        reverse: false
+	                    };
+	
+	                    $scope.gap = 5;
+	
+	                    $scope.filteredItems = [];
+	                    $scope.groupedItems = [];
+	                    $scope.itemsPerPage = 15;
+	                    $scope.pagedItems = [];
+	                    $scope.currentPage = 0;
+	
+	                    var searchMatch = function(haystack, needle) {
+	                        if (!needle) {
+	                            return true;
+	                        }
+	                        return haystack.toLowerCase().indexOf(needle.toLowerCase()) !== -1;
+	                    };
+	
+	                    // init the filtered items
+	                    $scope.search = function() {
+	                        $scope.filteredItems = $filter('filter')($scope.members, function(item) {
+	                            for (var attr in item) {
+	                                if (searchMatch(item[attr], $scope.query))
+	                                    return true;
+	                            }
+	                            return false;
+	                        });
+	                        // take care of the sorting order
+	                        if ($scope.sort.sortingOrder !== '') {
+	                            $scope.filteredItems = $filter('orderBy')($scope.filteredItems, $scope.sort.sortingOrder, $scope.sort.reverse);
+	                        }
+	                        $scope.currentPage = 0;
+	                        // now group by pages
+	                        $scope.groupToPages();
+	                    };
+	
+	
+	                    // calculate page in place
+	                    $scope.groupToPages = function() {
+	                        $scope.pagedItems = [];
+	
+	                        for (var i = 0; i < $scope.filteredItems.length; i++) {
+	                            if (i % $scope.itemsPerPage === 0) {
+	                                $scope.pagedItems[Math.floor(i / $scope.itemsPerPage)] = [$scope.filteredItems[i]];
+	                            } else {
+	                                $scope.pagedItems[Math.floor(i / $scope.itemsPerPage)].push($scope.filteredItems[i]);
+	                            }
+	                        }
+	                    };
+	
+	                    $scope.range = function(size, start, end) {
+	                        var ret = [];
+	                        console.log(size, start, end);
+	
+	                        if (size < end) {
+	                            end = size;
+	                            start = size - $scope.gap;
+	                        }
+	                        for (var i = start; i < end; i++) {
+	                            ret.push(i);
+	                        }
+	                        console.log(ret);
+	                        return ret;
+	                    };
+	
+	                    $scope.prevPage = function() {
+	                        if ($scope.currentPage > 0) {
+	                            $scope.currentPage--;
+	                        }
+	                    };
+	
+	                    $scope.nextPage = function() {
+	                        if ($scope.currentPage < $scope.pagedItems.length - 1) {
+	                            $scope.currentPage++;
+	                        }
+	                    };
+	
+	                    $scope.setPage = function() {
+	                        $scope.currentPage = this.n;
+	                    };
+	
+	                    // functions have been describe process the data for display
+	                    $scope.search();
+	                });
+            	}
+
+                
+                myDataPromise.then(function(result) {
+                	dataService.greeting();
+                    $scope.members = result;
+                    console.log("Controller");
+                    $scope.sort = {
+                        sortingOrder: 'status',
+                        reverse: false
+                    };
+
+                    $scope.gap = 5;
+
+                    $scope.filteredItems = [];
+                    $scope.groupedItems = [];
+                    $scope.itemsPerPage = 15;
+                    $scope.pagedItems = [];
+                    $scope.currentPage = 0;
+
+                    var searchMatch = function(haystack, needle) {
+                        if (!needle) {
+                            return true;
+                        }
+                        return haystack.toLowerCase().indexOf(needle.toLowerCase()) !== -1;
+                    };
+
+                    // init the filtered items
+                    $scope.search = function() {
+                        $scope.filteredItems = $filter('filter')($scope.members, function(item) {
+                            for (var attr in item) {
+                                if (searchMatch(item[attr], $scope.query))
+                                    return true;
+                            }
+                            return false;
+                        });
+                        // take care of the sorting order
+                        if ($scope.sort.sortingOrder !== '') {
+                            $scope.filteredItems = $filter('orderBy')($scope.filteredItems, $scope.sort.sortingOrder, $scope.sort.reverse);
+                        }
+                        $scope.currentPage = 0;
+                        // now group by pages
+                        $scope.groupToPages();
+                    };
+
+
+                    // calculate page in place
+                    $scope.groupToPages = function() {
+                        $scope.pagedItems = [];
+
+                        for (var i = 0; i < $scope.filteredItems.length; i++) {
+                            if (i % $scope.itemsPerPage === 0) {
+                                $scope.pagedItems[Math.floor(i / $scope.itemsPerPage)] = [$scope.filteredItems[i]];
+                            } else {
+                                $scope.pagedItems[Math.floor(i / $scope.itemsPerPage)].push($scope.filteredItems[i]);
+                            }
+                        }
+                    };
+
+                    $scope.range = function(size, start, end) {
+                        var ret = [];
+                        console.log(size, start, end);
+
+                        if (size < end) {
+                            end = size;
+                            start = size - $scope.gap;
+                        }
+                        for (var i = start; i < end; i++) {
+                            ret.push(i);
+                        }
+                        console.log(ret);
+                        return ret;
+                    };
+
+                    $scope.prevPage = function() {
+                        if ($scope.currentPage > 0) {
+                            $scope.currentPage--;
+                        }
+                    };
+
+                    $scope.nextPage = function() {
+                        if ($scope.currentPage < $scope.pagedItems.length - 1) {
+                            $scope.currentPage++;
+                        }
+                    };
+
+                    $scope.setPage = function() {
+                        $scope.currentPage = this.n;
+                    };
+
+                    // functions have been describe process the data for display
+                    $scope.search();
+                });
+
+            });
+
+
+            app.$inject = ['$scope', '$filter', '$http'];
+
+            app.directive("customSort", function() {
+                return {
+                    restrict: 'A',
+                    transclude: true,
+                    scope: {
+                        order: '=',
+                        sort: '='
+                    },
+                    template: ' <a ng-click="sort_by(order)" style="color: #555555;">' +
+                        '    <span ng-transclude></span>' +
+                        '    <i ng-class="selectedCls(order)"></i>' +
+                        '</a>',
+                    link: function(scope) {
+
+                            // change sorting order
+                            scope.sort_by = function(newSortingOrder) {
+                                var sort = scope.sort;
+
+                                if (sort.sortingOrder == newSortingOrder) {
+                                    sort.reverse = !sort.reverse;
+                                }
+
+                                sort.sortingOrder = newSortingOrder;
+                            };
+
+                            scope.selectedCls = function(column) {
+                                if (column == scope.sort.sortingOrder) {
+                                    return ('icon-chevron-' + ((scope.sort.reverse) ? 'down' : 'up'));
+                                } else {
+                                    return 'icon-sort'
+                                }
+                            };
+                        } // end link
+                }
+            });
+        </script>
+        <div class="container-fluid">
+            <div class="row-fluid">
+                <div class="span12">
+                    <legend>List of Members </legend>
+                    <table id="member-list" class="table table-striped table-bordered table-condensed table-hover">
+                        <thead>
+                            <tr>
+                                <th class="status" custom-sort order="'status'" sort="sort">Status&nbsp;</th>
+                                <th class="race" custom-sort order="'race'" sort="sort">Race&nbsp;</th>
+                                <th class="vegan" custom-sort order="'vegan'" sort="sort">Vegan&nbsp;</th>
+                                <th class="height" custom-sort order="'height'" sort="sort">Height&nbsp;</th>
+                                <th class="weight" custom-sort order="'weight'" sort="sort">Weight&nbsp;</th>
+                            </tr>
+                        </thead>
+                        <tfoot>
+                            <td colspan="6">
+                                <div class="pagination pull-right">
+                                    <ul>
+                                        <li ng-class="{disabled: currentPage == 0}"><a href ng-click="prevPage()">« Prev</a></li>
+
+                                        <li ng-repeat="n in range(pagedItems.length, currentPage, currentPage + gap) " ng-class="{active: n == currentPage}" ng-click="setPage()">
+                                            <a href ng-bind="n + 1">1</a>
+                                        </li>
+
+                                        <li ng-class="{disabled: (currentPage) == pagedItems.length - 1}">
+                                            <a href ng-click="nextPage()">Next »</a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tfoot>
+                        <tbody>
+                            <tr ng-repeat="member in pagedItems[currentPage] | orderBy:sort.sortingOrder:sort.reverse" ">
+                                <td>{{ member.status }}</td>
+                                <td>{{ member.race.ethnicGroup }}</td>
+                                <td>{{ member.isVeg }}</td>
+                                <td>{{ member.height }}</td>
+                                <td>{{ member.weight }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
